@@ -2,7 +2,7 @@ import json, urllib
 import pandas as pd
 import os.path
 
-
+api_key = open('api_key.txt', 'r').read()
 days_per_month = {'01':'31','02':'29','03':'31','04':'30','05':'31','06':'30','07':'31','08':'31','09':'30','10':'31','11':'30','12':'31'}
 
 def load_sites(path, first, last):
@@ -24,7 +24,7 @@ def closest_airports(df, number):
 		site_id = series[0]
 		lat = series[1]
 		lng = series[2]
-		url = "http://api.wunderground.com/api/154cd1b7582011db/geolookup/q/%s,%s.json" %(lat,lng)
+		url = "http://api.wunderground.com/api/%s/geolookup/q/%s,%s.json" %(api_key,lat,lng)
 
 		response = urllib.urlopen(url)
 		try:
@@ -63,7 +63,7 @@ def weather_for_airport(airport_dict, months):
 		annual_weather = pd.DataFrame()
 		for month,day in sorted(days_per_month.iteritems())[:months]:
 			for i in range(1,int(day) + 1):
-				url = 'http://api.wunderground.com/api/154cd1b7582011db/history_2012%s%02d/q/%s.json' %(month,i,airport_code)
+				url = 'http://api.wunderground.com/api/%s/history_2012%s%02d/q/%s.json' %(api_key,month,i,airport_code)
 				
 				response = urllib.urlopen(url)
 				try:
@@ -86,9 +86,9 @@ def weather_for_airport(airport_dict, months):
 
 if __name__ == '__main__':
 	# take how many sites you want
-	sites = load_sites('all_sites.csv',1,2)
+	sites = load_sites('all_sites.csv',0,10)
 	# find the closest airport (works with one for now) to your sites
-	airports = closest_airports(sites, 2)
+	airports = closest_airports(sites, 1)
 	# get the weather for the airport for how many months you like, and export it to csv
 	for airport in airports:
-		weather_for_airport(airport, 1)
+		weather_for_airport(airport, 12)
