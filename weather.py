@@ -27,7 +27,10 @@ def closest_airports(df, number):
 		url = "http://api.wunderground.com/api/154cd1b7582011db/geolookup/q/%s,%s.json" %(lat,lng)
 
 		response = urllib.urlopen(url)
-		data = json.loads(response.read())
+		try:
+			data = json.loads(response.read())
+		except ValueError:
+			print 'no airport data'
 
 		airports_temp = []
 		for item in data['location']['nearby_weather_stations']['airport']['station'][:number]:
@@ -36,7 +39,6 @@ def closest_airports(df, number):
 		airports.append({'site_id':"%01d" %site_id, 'airports': airports_temp})
 
 	return airports
-
 
 def weather_for_airport(airport_dict, months):
 	# airports_list is the list of dictionaries obtained in the closest_airports method
@@ -56,22 +58,26 @@ def weather_for_airport(airport_dict, months):
 		print 'file %s exists' %file_name
 	else :
 		annual_weather = pd.DataFrame()
-
-		for month,days in sorted(days_per_month.iteritems())[:months]:
-			for i in range(1,int(days) + 1):
+		for month,day in sorted(days_per_month.iteritems())[:months]:
+			for i in range(1,int(day) + 1):
 				url = 'http://api.wunderground.com/api/154cd1b7582011db/history_2012%s%02d/q/%s.json' %(month,i,airport_code)
 				print url
 
 				response = urllib.urlopen(url)
-				data = json.loads(response.read())
-				observations = data['history']['observations']
+				try:
+					data = json.loads(response.read())
 
-				daily_weather = pd.DataFrame(observations)
-				daily_weather.drop(['heatindexi','heatindexm','date','metar'],axis=1, inplace=True)
+					observations = data['history']['observations']
 
-				daily_weather['utcdate'] = daily_weather['utcdate'].map(lambda x: "%s/%s/%s %s:%s" %(x['mon'],x['mday'],x['year'],x['hour'],x['min']))
+					daily_weather = pd.DataFrame(observations)
+					daily_weather.drop(['heatindexi','heatindexm','date','metar'],axis=1, inplace=True)
 
-				annual_weather = annual_weather.append(daily_weather)
+					daily_weather['utcdate'] = daily_weather['utcdate'].map(lambda x: "%s/%s/%s %s:%s" %(x['mon'],x['mday'],x['year'],x['hour'],x['min']))
+
+					annual_weather = annual_weather.append(daily_weather)
+
+				except ValueError:
+					print 'no weather data'
 
 		annual_weather.to_csv(file_name)
 		print "saved at %s" %file_name
@@ -79,9 +85,9 @@ def weather_for_airport(airport_dict, months):
 
 if __name__ == '__main__':
 	# take how many sites you want
-	sites = load_sites('all_sites.csv',2)
+	sites = load_sites('all_sites.csv',1)
 	# find the closest airport (works with one for now) to your sites
 	airports = closest_airports(sites, 1)
 	# get the weather for the airport for how many months you like, and export it to csv
 	for airport in airports:
-		weather_for_airport(airport, 1)
+		weather_for_airport(airport, 12)
