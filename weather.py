@@ -1,5 +1,6 @@
 import json, urllib
 import pandas as pd
+import os.path
 
 
 days_per_month = {'01':'31','02':'29','03':'31','04':'30','05':'31','06':'30','07':'31','08':'31','09':'30','10':'31','11':'30','12':'31'}
@@ -13,7 +14,7 @@ def load_sites(path, number):
 
 	return df
 
-def closest_airport(df, number=1):
+def closest_airports(df, number):
 	# df is the dataframe obtained from the load_sites method
 	# number is how many closest airports do you want for each site
 	# uses the wunderground api to get the closest airports based on their latitude and longitude
@@ -37,43 +38,50 @@ def closest_airport(df, number=1):
 	return airports
 
 
-def weather_for_airport(airports_list, months):
-	# airports_list is the list of dictionaries obtained in the closest_airport method
+def weather_for_airport(airport_dict, months):
+	# airports_list is the list of dictionaries obtained in the closest_airports method
 	# months is how many months of weather do you want, starting from January
 	# saves a file per airport 
-	for item in airports_list:
-		site_id = item['site_id']
-		airports = item['airports']
 
-		for airport in airports:
-			airport_code = airport['icao']
-			annual_weather = pd.DataFrame()
+	site_id = airport_dict['site_id']
+	airport = airport_dict['airports'][0]  #only consider the first airport which is the closest
+	airport_code = airport['icao']
+	file_name = '%s_weather.csv' %(airport_code)
 
-			for month,days in sorted(days_per_month.iteritems())[:months]:
-				for i in range(1,int(days) + 1):
-					url = 'http://api.wunderground.com/api/154cd1b7582011db/history_2012%s%02d/q/%s.json' %(month,i,airport_code)
-					print url
+	if os.path.isfile(file_name):  
+		# check if file doesn't exist already. If so, don't download the data again
+		# note : if the data has been downloaded one first time for let's say a month, it would cause the data for the same airport
+		# to not be downloaded again, even though we want a different time period. This will be fixed later on, but for now, our script will run 
+		# for a full year everytime, so we don't need to think of merging files from different time periods yet. 
+		print 'file %s exists' %file_name
+	else :
+		annual_weather = pd.DataFrame()
 
-					response = urllib.urlopen(url)
-					data = json.loads(response.read())
-					observations = data['history']['observations']
+		for month,days in sorted(days_per_month.iteritems())[:months]:
+			for i in range(1,int(days) + 1):
+				url = 'http://api.wunderground.com/api/154cd1b7582011db/history_2012%s%02d/q/%s.json' %(month,i,airport_code)
+				print url
 
-					daily_weather = pd.DataFrame(observations)
-					daily_weather.drop(['heatindexi','heatindexm','date','metar'],axis=1, inplace=True)
+				response = urllib.urlopen(url)
+				data = json.loads(response.read())
+				observations = data['history']['observations']
 
-					daily_weather['utcdate'] = daily_weather['utcdate'].map(lambda x: "%s/%s/%s %s:%s" %(x['mon'],x['mday'],x['year'],x['hour'],x['min']))
+				daily_weather = pd.DataFrame(observations)
+				daily_weather.drop(['heatindexi','heatindexm','date','metar'],axis=1, inplace=True)
 
-					annual_weather = annual_weather.append(daily_weather)
+				daily_weather['utcdate'] = daily_weather['utcdate'].map(lambda x: "%s/%s/%s %s:%s" %(x['mon'],x['mday'],x['year'],x['hour'],x['min']))
 
-			path = '%s_%s_weather.csv' %(site_id,airport_code)
-			annual_weather.to_csv(path)
-			print "saved at %s" %path
+				annual_weather = annual_weather.append(daily_weather)
+
+		annual_weather.to_csv(file_name)
+		print "saved at %s" %file_name
 
 
 if __name__ == '__main__':
 	# take how many sites you want
-	sites = load_sites('all_sites.csv',1)
+	sites = load_sites('all_sites.csv',2)
 	# find the closest airport (works with one for now) to your sites
-	airports = closest_airport(sites)
+	airports = closest_airports(sites, 1)
 	# get the weather for the airport for how many months you like, and export it to csv
-	weather_for_airport(airports, 1)
+	for airport in airports:
+		weather_for_airport(airport, 1)
