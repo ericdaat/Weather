@@ -2,7 +2,7 @@ import pandas as pd
 import sys, os
 from ftplib import FTP
 import gzip
-from math import cos, asin, sqrt
+from math import cos, sqrt
 
 def download_from_ftp(ftp_name, to_download):
 	ftp = FTP(ftp_name)
@@ -10,34 +10,41 @@ def download_from_ftp(ftp_name, to_download):
 	ftp.cwd('/pub/data/noaa/2012')
 
 	for filename in to_download:
-		with open('output/%s.gz'%filename ,'wb') as output_file:
+		with open('output/%s.gz'%filename,'wb') as output_file:
+			print 'trying to do download %s.gz' %filename
 			try :
-				ftp.retrbinary('RETR %s' % filename, output_file.write)
+				ftp.retrbinary('RETR %s.gz' % filename, output_file.write)
+				print 'success'
 			except :
 				# TODO: improve this part, get another file if the one we want doesn't exist
 				print '%s.gz : no such file' %filename
-	
+				os.remove('output/%s.gz'%filename)
+
 	ftp.quit()
 
 
 def distance(lat1, lon1, lat2, lon2):
-    p = 0.017453292519943295
-    a = 0.5 - cos((lat2 - lat1) * p)/2 + cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2
-    return 12742 * asin(sqrt(a))
+    delta_lat = 110.574 * (lat1 - lat2)
+    delta_long = 111.320 * (lon1 - lon2) * cos(delta_lat)
+    return sqrt(delta_lat**2 + delta_long**2)
 
 
 def find_closest_station(sites,stations):
-	dist = sys.maxint
+	
 	closest_stations = []
 
-	for site_index, site in sites[:1].iterrows():
-		for station_index, station in stations[:3].iterrows():
-
+	for site_index, site in sites[:2].iterrows():
+		dist = sys.maxint
+		usaf = None
+		wban = None
+		for station_index, station in stations.iterrows():
 			tmp_dist = distance(site['LAT'],site['LNG'],station['LAT'],station['LON'])
 			if tmp_dist < dist:
 				dist = tmp_dist
+				usaf = station['USAF']
+				wban = station['WBAN']
 			
-		closest_stations.append({'SITE_ID':site['SITE_ID'],'USAF':station['USAF'],'WBAN':station['WBAN'],'distance':"%.2f"%dist})
+		closest_stations.append({'SITE_ID':site['SITE_ID'],'USAF':usaf,'WBAN':wban,'distance':"%.2f"%dist})
 
 	return closest_stations
 
@@ -59,7 +66,7 @@ def get_data(filename):
 				air_temp = line[87:92]
 				output_file.write('%s,%s,%s,%i,%i,%.2f\n' %(time,lat,lng,int(wind_angle),int(wind_speed),int(air_temp)/10.))
 
-		os.remove('output/%s.gz'%filename)
+		os.remove(input_path)
 
 
 if __name__ == '__main__':
@@ -70,6 +77,8 @@ if __name__ == '__main__':
 
 	closest_stations_dict = find_closest_station(sites,stations)
 	closest_stations_df = pd.DataFrame(closest_stations_dict)
+	print closest_stations_df
+
 	sites_and_stations = sites.merge(closest_stations_df, on='SITE_ID', how='left')
 	sites_and_stations.to_csv('sites_and_stations.csv')
 
